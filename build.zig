@@ -13,12 +13,22 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    zig_exe.addIncludePath(b.path("."));
+
     const ipc_module = b.createModule(.{
         .root_source_file = b.path("src/ipc.zig"),
     });
     zig_exe.root_module.addImport("ipc", ipc_module);
 
     b.installArtifact(zig_exe);
+
+    const run_zig_cmd = b.addRunArtifact(zig_exe);
+    run_zig_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_zig_cmd.addArgs(args);
+    }
+    const run_zig_step = b.step("run-zig", "R");
+    run_zig_step.dependOn(&run_zig_cmd.step);
 
     const c_exe = b.addExecutable(.{
         .name = "watcher-c",
@@ -46,14 +56,6 @@ pub fn build(b: *std.Build) void {
     });
 
     c_exe.addObject(ipc_obj);
-
-    const run_zig_cmd = b.addRunArtifact(zig_exe);
-    run_zig_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_zig_cmd.addArgs(args);
-    }
-    const run_zig_step = b.step("run-zig", "R");
-    run_zig_step.dependOn(&run_zig_cmd.step);
 
     const run_c_cmd = b.addRunArtifact(c_exe);
     run_c_cmd.step.dependOn(b.getInstallStep());

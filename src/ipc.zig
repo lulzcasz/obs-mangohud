@@ -10,18 +10,49 @@ pub const IPCData = extern struct {
     gpu_load: i32,
 };
 
-var ipc_data: IPCData = undefined;
+pub fn get_ipc_data_ptr() !*volatile IPCData {
+    const file = try std.fs.openFileAbsolute("/dev/shm/MangoHudTelemetry", .{
+        .mode = .read_only,
+    });
+    defer file.close();
 
-pub export fn get_ipc_data_ptr() *IPCData {
-    ipc_data = .{
-        .update_count = 123,
-        .fps = 123.456,
-        .frametime = 23.23154,
-        .min_frametime = 2.4348,
-        .max_frametime = 25.1238545,
-        .cpu_percent = 0.9192385,
-        .gpu_load = 98,
-    };
+    const mapped_memory = try std.posix.mmap(
+        null,
+        @sizeOf(IPCData),
+        std.posix.PROT.READ,
+        .{ .TYPE = .SHARED },
+        file.handle,
+        0,
+    );
 
-    return &ipc_data;
+    return @ptrCast(@alignCast(mapped_memory.ptr));
+}
+
+pub fn get_data_snapshot(shared_ptr: *volatile IPCData) IPCData {
+    while (true) {
+        const start_seq = shared_ptr.update_count;
+
+        if (start_seq % 2 != 0) {
+            std.Thread.yield() catch {};
+            continue;
+        }
+
+        const snapshot = IPCData{
+            .update_count = start_seq,
+            .fps = shared_ptr.fps,
+            .frametime = shared_ptr.frametime,
+            .min_frametime = shared_ptr.min_frametime,
+            .max_frametime = shared_ptr.max_frametime,
+            .cpu_percent = shared_ptr.cpu_percent,
+            .gpu_load = shared_ptr.gpu_load,
+        };
+
+        const end_seq = shared_ptr.update_count;
+
+        if (start_seq == end_seq) {
+            return snapshot;
+        }
+
+        std.Thread.yield() catch {};
+    }
 }

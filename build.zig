@@ -4,13 +4,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const ipc_module = b.createModule(.{
-        .root_source_file = b.path("src/ipc.zig"),
+    const shm_module = b.createModule(.{
+        .root_source_file = b.path("src/shm.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    ipc_module.addIncludePath(b.path("src"));
+    shm_module.addIncludePath(b.path("src"));
 
     const watcher = b.addExecutable(.{
         .name = "watcher",
@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
     watcher.use_llvm = true;
     watcher.use_lld = true;
 
-    watcher.root_module.addImport("ipc", ipc_module);
+    watcher.root_module.addImport("shm", shm_module);
     b.installArtifact(watcher);
 
     const plugin = b.addLibrary(.{
@@ -56,17 +56,17 @@ pub fn build(b: *std.Build) void {
 
     plugin.addIncludePath(b.path("src"));
 
-    const ipc_obj = b.addObject(.{
-        .name = "ipc_obj",
+    const shm_obj = b.addObject(.{
+        .name = "shm_obj",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/ipc.zig"),
+            .root_source_file = b.path("src/shm.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,
         }),
     });
-    ipc_obj.root_module.addIncludePath(b.path("src"));
-    plugin.addObject(ipc_obj);
+    shm_obj.root_module.addIncludePath(b.path("src"));
+    plugin.addObject(shm_obj);
 
     b.installArtifact(plugin);
 

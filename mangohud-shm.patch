@@ -1,0 +1,132 @@
+diff --git a/src/meson.build b/src/meson.build
+index 9534a18..9756509 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -95,6 +95,7 @@ if is_unixy
+     'net.cpp',
+     'shell.cpp',
+     'ftrace.cpp',
++    'shm.cpp'
+   )
+ 
+   if get_option('with_fex')
+diff --git a/src/overlay.cpp b/src/overlay.cpp
+index 2196953..578ddec 100644
+--- a/src/overlay.cpp
++++ b/src/overlay.cpp
+@@ -28,6 +28,7 @@
+ #include "net.h"
+ #include "fex.h"
+ #include "ftrace.h"
++#include "shm.h"
+ 
+ #ifdef __linux__
+ #include <libgen.h>
+@@ -293,6 +294,23 @@ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const stru
+    auto max = std::max_element(frametime_data.begin(), frametime_data.end());
+    min_frametime = min[0];
+    max_frametime = max[0];
++
++   MangoHudMetrics metrics;
++
++   metrics.fps = sw_stats.fps;
++   metrics.frametime = frametime;
++   metrics.min_frametime = min_frametime;
++   metrics.max_frametime = max_frametime;
++   metrics.cpu_percent = cpuStats.GetCPUDataTotal().percent;
++
++   if (gpus && gpus->active_gpu()) {
++      metrics.gpu_load = gpus->active_gpu()->metrics.load;
++   } else {
++      metrics.gpu_load = 0;
++   }
++
++   shm_update(metrics);
++
+    // double min_time = UINT64_MAX, max_time = 0;
+    // for (auto& stat : sw_stats.frames_stats ){
+    //    min_time = MIN2(stat.stats[0], min_time);
+diff --git a/src/shm.cpp b/src/shm.cpp
+new file mode 100644
+index 0000000..5665fbc
+--- /dev/null
++++ b/src/shm.cpp
+@@ -0,0 +1,54 @@
++#include <iostream>
++#include <sys/mman.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include "shm.h"
++
++static MangoHudSHM* data = nullptr;
++static bool initialized = false;
++
++__attribute__((destructor))
++static void cleanup() {
++    if (data) {
++        munmap(data, sizeof(MangoHudSHM));
++        data = nullptr;
++    }
++
++    shm_unlink("/MangoHud");
++}
++
++static void init() {
++    if (initialized) return;
++
++    int fd = shm_open("/MangoHud", O_CREAT | O_RDWR, 0666);
++    if (fd >= 0) {
++        ftruncate(fd, sizeof(MangoHudSHM));
++
++        data = (MangoHudSHM*)mmap(0, sizeof(MangoHudSHM), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++        
++        if (data == MAP_FAILED) {
++            data = nullptr;
++        }
++
++        close(fd);
++    }
++    initialized = true;
++}
++
++void shm_update(const MangoHudMetrics& metrics) {
++    if (!initialized) {
++        init();
++    }
++
++    if (!data) return;
++
++    data->update_count++;
++
++    __atomic_thread_fence(__ATOMIC_RELEASE); 
++
++    data->metrics = metrics;
++
++    __atomic_thread_fence(__ATOMIC_RELEASE); 
++
++    data->update_count++; 
++}
+diff --git a/src/shm.h b/src/shm.h
+new file mode 100644
+index 0000000..3ede287
+--- /dev/null
++++ b/src/shm.h
+@@ -0,0 +1,18 @@
++#pragma once
++#include <stdint.h>
++
++struct MangoHudMetrics {
++    float fps;
++    float frametime;
++    double min_frametime;
++    double max_frametime;
++    float cpu_percent;
++    int32_t gpu_load;
++};
++
++struct MangoHudSHM {
++    uint64_t update_count;
++    MangoHudMetrics metrics;
++};
++
++void shm_update(const MangoHudMetrics& metrics);

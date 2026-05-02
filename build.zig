@@ -12,6 +12,13 @@ pub fn build(b: *std.Build) void {
     });
     shm_module.addIncludePath(b.path("src"));
 
+    const processor_module = b.createModule(.{
+        .root_source_file = b.path("src/processor.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    processor_module.addImport("shm", shm_module);
+
     const watcher = b.addExecutable(.{
         .name = "watcher",
         .root_module = b.createModule(.{
@@ -26,6 +33,7 @@ pub fn build(b: *std.Build) void {
     watcher.use_lld = true;
 
     watcher.root_module.addImport("shm", shm_module);
+    watcher.root_module.addImport("processor", processor_module);
     b.installArtifact(watcher);
 
     const plugin = b.addLibrary(.{

@@ -11,7 +11,7 @@ index 9534a18..9756509 100644
  
    if get_option('with_fex')
 diff --git a/src/overlay.cpp b/src/overlay.cpp
-index 2196953..578ddec 100644
+index 2196953..984b5fa 100644
 --- a/src/overlay.cpp
 +++ b/src/overlay.cpp
 @@ -28,6 +28,7 @@
@@ -22,40 +22,44 @@ index 2196953..578ddec 100644
  
  #ifdef __linux__
  #include <libgen.h>
-@@ -293,6 +294,23 @@ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const stru
-    auto max = std::max_element(frametime_data.begin(), frametime_data.end());
-    min_frametime = min[0];
-    max_frametime = max[0];
+@@ -312,6 +313,26 @@ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const stru
+ void update_hud_info(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID){
+    uint64_t now = os_time_get_nano(); /* ns */
+    uint64_t frametime_ns = now - sw_stats.last_present_time;
 +
-+   MangoHudMetrics metrics;
++   MangoHudSHM shm_data = {};
 +
-+   metrics.fps = sw_stats.fps;
-+   metrics.frametime = frametime;
-+   metrics.min_frametime = min_frametime;
-+   metrics.max_frametime = max_frametime;
-+   metrics.cpu_percent = cpuStats.GetCPUDataTotal().percent;
++   shm_data.metrics.fps = sw_stats.fps;
++   shm_data.metrics.frametime = frametime;
++   shm_data.metrics.min_frametime = min_frametime;
++   shm_data.metrics.max_frametime = max_frametime;
++   shm_data.metrics.cpu_percent = cpuStats.GetCPUDataTotal().percent;
 +
 +   if (gpus && gpus->active_gpu()) {
-+      metrics.gpu_load = gpus->active_gpu()->metrics.load;
++      shm_data.metrics.gpu_load = gpus->active_gpu()->metrics.load;
 +   } else {
-+      metrics.gpu_load = 0;
++      shm_data.metrics.gpu_load = 0;
 +   }
 +
-+   shm_update(metrics);
++   shm_data.param_enabled[PARAM_GPU_USAGE] = params.enabled[OVERLAY_PARAM_ENABLED_gpu_stats];
++   shm_data.param_enabled[PARAM_CPU_USAGE] = params.enabled[OVERLAY_PARAM_ENABLED_cpu_stats];
 +
-    // double min_time = UINT64_MAX, max_time = 0;
-    // for (auto& stat : sw_stats.frames_stats ){
-    //    min_time = MIN2(stat.stats[0], min_time);
++   shm_update(shm_data);
++
+    if (!get_params()->no_display || logger->is_active())
+       update_hud_info_with_frametime(sw_stats, params, vendorID, frametime_ns);
+ }
 diff --git a/src/shm.cpp b/src/shm.cpp
 new file mode 100644
-index 0000000..5665fbc
+index 0000000..ca81070
 --- /dev/null
 +++ b/src/shm.cpp
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,52 @@
 +#include <iostream>
 +#include <sys/mman.h>
 +#include <fcntl.h>
 +#include <unistd.h>
++#include <cstring>
 +#include "shm.h"
 +
 +static MangoHudSHM* data = nullptr;
@@ -67,7 +71,6 @@ index 0000000..5665fbc
 +        munmap(data, sizeof(MangoHudSHM));
 +        data = nullptr;
 +    }
-+
 +    shm_unlink("/MangoHud");
 +}
 +
@@ -77,19 +80,17 @@ index 0000000..5665fbc
 +    int fd = shm_open("/MangoHud", O_CREAT | O_RDWR, 0666);
 +    if (fd >= 0) {
 +        ftruncate(fd, sizeof(MangoHudSHM));
-+
 +        data = (MangoHudSHM*)mmap(0, sizeof(MangoHudSHM), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 +        
 +        if (data == MAP_FAILED) {
 +            data = nullptr;
 +        }
-+
 +        close(fd);
 +    }
 +    initialized = true;
 +}
 +
-+void shm_update(const MangoHudMetrics& metrics) {
++void shm_update(const MangoHudSHM& shm_data) {
 +    if (!initialized) {
 +        init();
 +    }
@@ -97,23 +98,30 @@ index 0000000..5665fbc
 +    if (!data) return;
 +
 +    data->update_count++;
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++
++    memcpy(data->param_enabled, shm_data.param_enabled, sizeof(bool) * PARAM_ENABLED_MAX);
++    
++    data->metrics = shm_data.metrics;
 +
 +    __atomic_thread_fence(__ATOMIC_RELEASE); 
-+
-+    data->metrics = metrics;
-+
-+    __atomic_thread_fence(__ATOMIC_RELEASE); 
-+
 +    data->update_count++; 
 +}
 diff --git a/src/shm.h b/src/shm.h
 new file mode 100644
-index 0000000..3ede287
+index 0000000..c160d2b
 --- /dev/null
 +++ b/src/shm.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,26 @@
 +#pragma once
 +#include <stdint.h>
++#include <stdbool.h>
++
++typedef enum {
++    PARAM_GPU_USAGE,
++    PARAM_CPU_USAGE,
++    PARAM_ENABLED_MAX
++} MetricFlag;
 +
 +struct MangoHudMetrics {
 +    float fps;
@@ -126,7 +134,8 @@ index 0000000..3ede287
 +
 +struct MangoHudSHM {
 +    uint64_t update_count;
++    bool param_enabled[PARAM_ENABLED_MAX];
 +    MangoHudMetrics metrics;
 +};
 +
-+void shm_update(const MangoHudMetrics& metrics);
++void shm_update(const MangoHudSHM& shm_data);

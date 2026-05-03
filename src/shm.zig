@@ -1,18 +1,11 @@
 const std = @import("std");
 
-pub const MangoHudMetrics = extern struct {
-    fps: f32,
-    frametime: f32,
-    min_frametime: f64,
-    max_frametime: f64,
-    cpu_percent: f32,
-    gpu_load: i32,
-};
+pub const c = @cImport({
+    @cInclude("shm.h");
+});
 
-pub const MangoHudSHM = extern struct {
-    update_count: u64,
-    metrics: MangoHudMetrics,
-};
+pub const MangoHudMetrics = c.struct_MangoHudMetrics;
+pub const MangoHudSHM = c.struct_MangoHudSHM;
 
 pub fn get_shm_ptr() !*volatile MangoHudSHM {
     const file = try std.fs.openFileAbsolute("/dev/shm/MangoHud", .{
@@ -41,17 +34,19 @@ pub fn get_shm_snapshot(shm_ptr: *volatile MangoHudSHM) MangoHudSHM {
             continue;
         }
 
-        const snapshot = MangoHudSHM{
-            .update_count = start_seq,
-            .metrics = .{
-                .fps = shm_ptr.metrics.fps,
-                .frametime = shm_ptr.metrics.frametime,
-                .min_frametime = shm_ptr.metrics.min_frametime,
-                .max_frametime = shm_ptr.metrics.max_frametime,
-                .cpu_percent = shm_ptr.metrics.cpu_percent,
-                .gpu_load = shm_ptr.metrics.gpu_load,
-            },
-        };
+        var snapshot: MangoHudSHM = undefined;
+        snapshot.update_count = start_seq;
+
+        for (0..c.PARAM_ENABLED_MAX) |i| {
+            snapshot.param_enabled[i] = shm_ptr.param_enabled[i];
+        }
+
+        snapshot.metrics.fps = shm_ptr.metrics.fps;
+        snapshot.metrics.frametime = shm_ptr.metrics.frametime;
+        snapshot.metrics.min_frametime = shm_ptr.metrics.min_frametime;
+        snapshot.metrics.max_frametime = shm_ptr.metrics.max_frametime;
+        snapshot.metrics.cpu_percent = shm_ptr.metrics.cpu_percent;
+        snapshot.metrics.gpu_load = shm_ptr.metrics.gpu_load;
 
         const end_seq = shm_ptr.update_count;
 

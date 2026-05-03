@@ -44,6 +44,10 @@ pub fn build(b: *std.Build) void {
     watcher.use_lld = true;
     watcher.root_module.addImport("shm", shm_module);
     watcher.root_module.addImport("processor", processor_module);
+    // Permite que o Zig leia o seu header C
+    watcher.linkLibC();
+    // Adicione o diretório onde o seu "shm.h" está localizado (ex: a mesma pasta)
+    watcher.addIncludePath(.{ .cwd_relative = "." });
     b.installArtifact(watcher);
 
     const plugin = b.addLibrary(.{

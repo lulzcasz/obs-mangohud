@@ -1,13 +1,13 @@
 const std = @import("std");
 const shm = @import("shm");
-const processor = @import("processor");
+const metrics = @import("metrics");
 
-var global_metrics: processor.ProcessedMetrics = std.mem.zeroInit(
-    processor.ProcessedMetrics,
+var global_metrics: metrics.ProcessedMetrics = std.mem.zeroInit(
+    metrics.ProcessedMetrics,
     .{},
 );
 
-export fn get_metrics_ptr() *processor.ProcessedMetrics {
+export fn get_metrics_ptr() *metrics.ProcessedMetrics {
     return &global_metrics;
 }
 
@@ -21,7 +21,7 @@ fn engine_loop() void {
         if (data.update_count != last_seq) {
             last_seq = data.update_count;
 
-            global_metrics = processor.process_metrics(data.metrics);
+            global_metrics = metrics.process_metrics(data.metrics);
         }
 
         std.Thread.sleep(5 * std.time.ns_per_ms);

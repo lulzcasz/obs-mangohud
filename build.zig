@@ -10,14 +10,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    shm_module.addIncludePath(b.path("src"));
+    shm_module.addIncludePath(b.path("include"));
 
-    const processor_module = b.createModule(.{
-        .root_source_file = b.path("src/processor.zig"),
+    const metrics_module = b.createModule(.{
+        .root_source_file = b.path("src/metrics.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-    processor_module.addImport("shm", shm_module);
+    metrics_module.addIncludePath(b.path("include"));
+    metrics_module.addImport("shm", shm_module);
 
     const engine_obj = b.addObject(.{
         .name = "engine_obj",
@@ -29,7 +31,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     engine_obj.root_module.addImport("shm", shm_module);
-    engine_obj.root_module.addImport("processor", processor_module);
+    engine_obj.root_module.addImport("metrics", metrics_module);
 
     const watcher = b.addExecutable(.{
         .name = "watcher",
@@ -43,11 +45,11 @@ pub fn build(b: *std.Build) void {
     watcher.use_llvm = true;
     watcher.use_lld = true;
     watcher.root_module.addImport("shm", shm_module);
-    watcher.root_module.addImport("processor", processor_module);
-    // Permite que o Zig leia o seu header C
+    watcher.root_module.addImport("metrics", metrics_module);
+
     watcher.linkLibC();
-    // Adicione o diretório onde o seu "shm.h" está localizado (ex: a mesma pasta)
-    watcher.addIncludePath(.{ .cwd_relative = "." });
+    watcher.addIncludePath(b.path("include"));
+
     b.installArtifact(watcher);
 
     const plugin = b.addLibrary(.{
@@ -71,7 +73,8 @@ pub fn build(b: *std.Build) void {
             "-DPLUGIN_VERSION=\"0.0.0\"",
         },
     });
-    plugin.addIncludePath(b.path("src"));
+
+    plugin.addIncludePath(b.path("include"));
 
     const shm_obj = b.addObject(.{
         .name = "shm_obj",
@@ -82,7 +85,8 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    shm_obj.root_module.addIncludePath(b.path("src"));
+
+    shm_obj.root_module.addIncludePath(b.path("include"));
 
     plugin.addObject(shm_obj);
     plugin.addObject(engine_obj);
@@ -100,6 +104,9 @@ pub fn build(b: *std.Build) void {
         .file = b.path("tools/harness.c"),
         .flags = &[_][]const u8{ "-Wall", "-Wextra" },
     });
+
+    harness.addIncludePath(b.path("include"));
+
     harness.addObject(engine_obj);
     b.installArtifact(harness);
 

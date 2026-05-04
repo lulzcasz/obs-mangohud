@@ -1,6 +1,6 @@
 const std = @import("std");
 const shm = @import("shm");
-const processor = @import("processor");
+const metrics = @import("metrics");
 
 pub fn main() !void {
     const shm_ptr = try shm.get_shm_ptr();
@@ -12,7 +12,7 @@ pub fn main() !void {
         if (data.update_count != last_seq) {
             last_seq = data.update_count;
 
-            const processed = processor.process_metrics(data.metrics);
+            const processed = metrics.process_metrics(data.metrics);
 
             std.debug.print("\x1B[2J\x1B[H", .{}); // Clear screen
 

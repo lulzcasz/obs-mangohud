@@ -1,22 +1,20 @@
 const std = @import("std");
 
-pub const c = @cImport({
-    @cInclude("shm.h");
-});
+pub const c = @import("shm");
 
 pub const MangoHudMetrics = c.struct_MangoHudMetrics;
 pub const MangoHudSHM = c.struct_MangoHudSHM;
 
-pub fn get_shm_ptr() !*volatile MangoHudSHM {
-    const file = try std.fs.openFileAbsolute("/dev/shm/MangoHud", .{
+pub fn get_shm_ptr(io: std.Io) !*volatile MangoHudSHM {
+    const file = try std.Io.Dir.openFileAbsolute(io, "/dev/shm/MangoHud", .{
         .mode = .read_only,
     });
-    defer file.close();
+    defer file.close(io);
 
     const mapped_memory = try std.posix.mmap(
         null,
         @sizeOf(MangoHudSHM),
-        std.posix.PROT.READ,
+        .{ .READ = true },
         .{ .TYPE = .SHARED },
         file.handle,
         0,

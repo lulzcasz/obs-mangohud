@@ -2,8 +2,9 @@ const std = @import("std");
 const shm = @import("shm");
 const metrics = @import("metrics");
 
-pub fn main() !void {
-    const shm_ptr = try shm.get_shm_ptr();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const shm_ptr = try shm.get_shm_ptr(io);
     var last_seq: u64 = 0;
 
     while (true) {
@@ -38,6 +39,6 @@ pub fn main() !void {
             std.debug.print("-------------------------\n", .{});
         }
 
-        std.Thread.sleep(5 * std.time.ns_per_ms);
+        try io.sleep(.fromMilliseconds(5), .awake);
     }
 }

@@ -1,9 +1,7 @@
 const std = @import("std");
 const shm = @import("shm");
 
-const c = @cImport({
-    @cInclude("metrics.h");
-});
+pub const c = @import("metrics");
 
 pub const ProcessedMetrics = c.struct_ProcessedMetrics;
 

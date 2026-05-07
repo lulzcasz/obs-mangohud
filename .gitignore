@@ -1,4 +1,7 @@
 .vscode/
 .zig-cache/
+.venv/
+.pytest_cache/
 
 zig-out/
+__pycache__/

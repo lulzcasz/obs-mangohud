@@ -20,7 +20,6 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/shm.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
         .imports = &.{
             .{
                 .name = "shm",
@@ -33,7 +32,6 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/metrics.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
         .imports = &.{
             .{
                 .name = "metrics",
@@ -41,6 +39,19 @@ pub fn build(b: *std.Build) void {
             },
         },
     });
+
+    module_metrics.addImport("shm", module_shm);
+
+    const obj_mangohud = b.addObject(.{
+        .name = "engine_obj",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/mangohud.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    obj_mangohud.root_module.addImport("shm", module_shm);
+    obj_mangohud.root_module.addImport("metrics", module_metrics);
 
     module_metrics.addImport("shm", module_shm);
 
@@ -60,4 +71,26 @@ pub fn build(b: *std.Build) void {
 
     const run_watcher = b.addRunArtifact(exe_watcher);
     b.step("run-watcher", "run watcher").dependOn(&run_watcher.step);
+
+    const test_exe = b.addExecutable(.{
+        .name = "test_mangohud",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    test_exe.root_module.addCSourceFile(.{
+        .file = b.path("tests/test_mangohud.c"),
+        .flags = &[_][]const u8{ "-Wall", "-Wextra" },
+    });
+
+    test_exe.root_module.addIncludePath(b.path("include"));
+
+    test_exe.root_module.addObject(obj_mangohud);
+
+    const run_test = b.addRunArtifact(test_exe);
+
+    const test_step = b.step("test", "run integration tests");
+    test_step.dependOn(&run_test.step);
 }

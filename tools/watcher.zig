@@ -7,6 +7,9 @@ pub fn main(init: std.process.Init) !void {
     const shm_ptr = try shm.get_shm_ptr(io);
     var last_seq: u64 = 0;
 
+    const GPU_IDX: usize = @intCast(@intFromEnum(shm.MetricFlag.PARAM_GPU_USAGE));
+    const CPU_IDX: usize = @intCast(@intFromEnum(shm.MetricFlag.PARAM_CPU_USAGE));
+
     while (true) {
         const data = shm.get_shm_snapshot(shm_ptr);
 
@@ -15,7 +18,7 @@ pub fn main(init: std.process.Init) !void {
 
             const processed = metrics.process_metrics(data.metrics);
 
-            std.debug.print("\x1B[2J\x1B[H", .{}); // Clear screen
+            std.debug.print("\x1B[2J\x1B[H", .{});
 
             std.debug.print("FPS            : {d}\n", .{processed.fps});
             std.debug.print("Frametime      : {d:.1} ms\n", .{processed.frametime});
@@ -24,13 +27,13 @@ pub fn main(init: std.process.Init) !void {
 
             std.debug.print("--- Active Parameters ---\n", .{});
 
-            if (data.param_enabled[shm.c.PARAM_GPU_USAGE]) {
+            if (data.param_enabled[GPU_IDX]) {
                 std.debug.print("GPU load       : {d}%\n", .{processed.gpu_load});
             } else {
                 std.debug.print("GPU load       : DISABLED (Escondido pelo usuário)\n", .{});
             }
 
-            if (data.param_enabled[shm.c.PARAM_CPU_USAGE]) {
+            if (data.param_enabled[CPU_IDX]) {
                 std.debug.print("CPU percent    : {d}%\n", .{processed.cpu_percent});
             } else {
                 std.debug.print("CPU percent    : DISABLED (Escondido pelo usuário)\n", .{});

@@ -1,9 +1,27 @@
 const std = @import("std");
 
-pub const c = @import("shm");
+pub const PARAM_ENABLED_MAX: usize = 2;
 
-pub const MangoHudMetrics = c.struct_MangoHudMetrics;
-pub const MangoHudSHM = c.struct_MangoHudSHM;
+pub const MetricFlag = enum(c_int) {
+    PARAM_GPU_USAGE = 0,
+    PARAM_CPU_USAGE = 1,
+    PARAM_ENABLED_MAX = PARAM_ENABLED_MAX,
+};
+
+pub const MangoHudMetrics = extern struct {
+    fps: f32,
+    frametime: f32,
+    min_frametime: f64,
+    max_frametime: f64,
+    cpu_percent: f32,
+    gpu_load: i32,
+};
+
+pub const MangoHudSHM = extern struct {
+    update_count: u64,
+    param_enabled: [PARAM_ENABLED_MAX]bool,
+    metrics: MangoHudMetrics,
+};
 
 pub fn get_shm_ptr(io: std.Io) !*volatile MangoHudSHM {
     const file = try std.Io.Dir.openFileAbsolute(io, "/dev/shm/MangoHud", .{
@@ -35,7 +53,7 @@ pub fn get_shm_snapshot(shm_ptr: *volatile MangoHudSHM) MangoHudSHM {
         var snapshot: MangoHudSHM = undefined;
         snapshot.update_count = start_seq;
 
-        for (0..c.PARAM_ENABLED_MAX) |i| {
+        for (0..PARAM_ENABLED_MAX) |i| {
             snapshot.param_enabled[i] = shm_ptr.param_enabled[i];
         }
 

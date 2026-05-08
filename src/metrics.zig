@@ -1,9 +1,14 @@
 const std = @import("std");
 const shm = @import("shm");
 
-pub const c = @import("metrics");
-
-pub const ProcessedMetrics = c.struct_ProcessedMetrics;
+pub const ProcessedMetrics = extern struct {
+    fps: i32,
+    frametime: f32,
+    min_frametime: f32,
+    max_frametime: f32,
+    cpu_percent: i32,
+    gpu_load: i32,
+};
 
 pub fn process_metrics(raw_metrics: shm.MangoHudMetrics) ProcessedMetrics {
     return ProcessedMetrics{

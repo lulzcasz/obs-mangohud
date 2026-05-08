@@ -4,40 +4,16 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const translate_shm = b.addTranslateC(.{
-        .root_source_file = b.path("include/shm.h"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const translate_metrics = b.addTranslateC(.{
-        .root_source_file = b.path("include/metrics.h"),
-        .target = target,
-        .optimize = optimize,
-    });
-
     const module_shm = b.createModule(.{
         .root_source_file = b.path("src/shm.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{
-            .{
-                .name = "shm",
-                .module = translate_shm.createModule(),
-            },
-        },
     });
 
     const module_metrics = b.createModule(.{
         .root_source_file = b.path("src/metrics.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{
-            .{
-                .name = "metrics",
-                .module = translate_metrics.createModule(),
-            },
-        },
     });
 
     module_metrics.addImport("shm", module_shm);
@@ -71,65 +47,4 @@ pub fn build(b: *std.Build) void {
 
     const run_watcher = b.addRunArtifact(exe_watcher);
     b.step("run-watcher", "run watcher").dependOn(&run_watcher.step);
-
-    const test_exe = b.addExecutable(.{
-        .name = "test_mangohud",
-        .root_module = b.createModule(.{
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-
-    test_exe.root_module.addCSourceFile(.{
-        .file = b.path("tests/test_mangohud.c"),
-        .flags = &[_][]const u8{ "-Wall", "-Wextra" },
-    });
-
-    test_exe.root_module.addIncludePath(b.path("include"));
-
-    test_exe.root_module.addObject(obj_mangohud);
-
-    const run_test = b.addRunArtifact(test_exe);
-
-    const test_step = b.step("test", "run integration tests");
-    test_step.dependOn(&run_test.step);
-
-    const plugin = b.addLibrary(.{
-        .linkage = .dynamic,
-        .name = "mangohud",
-        .root_module = b.createModule(.{
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true, // libc linked here
-        }),
-    });
-    plugin.out_filename = "mangohud.so";
-
-    plugin.root_module.linkSystemLibrary("libobs", .{});
-
-    plugin.root_module.addCSourceFile(.{
-        .file = b.path("src/mangohud.c"),
-        .flags = &[_][]const u8{
-            "-Wall",
-            "-Wextra",
-            "-DPLUGIN_NAME=\"mangohud\"",
-            "-DPLUGIN_VERSION=\"0.0.0\"",
-        },
-    });
-
-    b.installArtifact(plugin);
-
-    plugin.root_module.addIncludePath(b.path("include"));
-
-    const deploy_step = b.step("deploy", "deploy the plugin to your local OBS plugins folder");
-
-    const deploy_cmd = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        "mkdir -p ~/.config/obs-studio/plugins/mangohud/bin/64bit && cp \"$1\" ~/.config/obs-studio/plugins/mangohud/bin/64bit/mangohud.so",
-        "sh",
-    });
-    deploy_cmd.addFileArg(plugin.getEmittedBin());
-
-    deploy_step.dependOn(&deploy_cmd.step);
 }

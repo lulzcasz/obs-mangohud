@@ -4,6 +4,27 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const plugin = b.addLibrary(.{
+        .name = "mangohud",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/mangohud.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+
+    plugin.root_module.addCSourceFile(.{
+        .file = b.path("src/mangohud.c"),
+        .flags = &.{"-DHAVE_OBSCONFIG_H"},
+    });
+
+    plugin.root_module.addIncludePath(b.path("src"));
+    plugin.root_module.linkSystemLibrary("obs", .{});
+
+    b.installArtifact(plugin);
+
     const module_shm = b.createModule(.{
         .root_source_file = b.path("src/shm.zig"),
         .target = target,
@@ -15,19 +36,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
-    module_metrics.addImport("shm", module_shm);
-
-    const obj_mangohud = b.addObject(.{
-        .name = "engine_obj",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/mangohud.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    obj_mangohud.root_module.addImport("shm", module_shm);
-    obj_mangohud.root_module.addImport("metrics", module_metrics);
 
     module_metrics.addImport("shm", module_shm);
 
